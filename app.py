@@ -3,7 +3,9 @@ import os
 import sqlite3
 import hashlib
 
+# Load .env locally (optional)
 from dotenv import load_dotenv
+load_dotenv()  # Works locally, ignored on Streamlit Cloud
 
 from langchain_groq import ChatGroq
 from langchain_community.document_loaders import PyPDFLoader
@@ -16,8 +18,16 @@ from langchain_core.runnables import RunnablePassthrough
 # ---------------- CONFIG ----------------
 st.set_page_config("PDF ChatBot", "📄")
 
-load_dotenv()
+# ---------------- API KEY ----------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    st.error("GROQ_API_KEY not found! Set it in Streamlit Secrets.")
+    st.stop()
+
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    api_key=GROQ_API_KEY  # Pass API key explicitly
+)
 
 # ---------------- DATABASE ----------------
 conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -39,7 +49,6 @@ CREATE TABLE IF NOT EXISTS documents(
     vector_path TEXT
 )
 """)
-
 conn.commit()
 
 # ---------------- HELPERS ----------------
@@ -71,7 +80,6 @@ if "user" not in st.session_state:
 # ---------------- AUTH UI ----------------
 if st.session_state.user is None:
     st.title("🔐 Login / Register")
-
     tab1, tab2 = st.tabs(["Login", "Register"])
 
     with tab1:
@@ -93,12 +101,10 @@ if st.session_state.user is None:
                 st.success("Registered successfully")
             else:
                 st.error("Username already exists")
-
     st.stop()
 
 # ---------------- MAIN APP ----------------
-st.title("📄 PDF ChatBot ")
-
+st.title("📄 PDF ChatBot")
 user_id = st.session_state.user
 user_vector_dir = f"vectors/user_{user_id}"
 os.makedirs(user_vector_dir, exist_ok=True)
@@ -117,18 +123,14 @@ if os.path.exists(f"{user_vector_dir}/index.faiss"):
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
     st.header("📂 Upload PDF")
-
     uploaded_file = st.file_uploader("Upload PDF", type="pdf")
-
     if uploaded_file:
         path = f"{user_vector_dir}/{uploaded_file.name}"
-
         with open(path, "wb") as f:
             f.write(uploaded_file.read())
 
         loader = PyPDFLoader(path)
         docs = loader.load()
-
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=150
@@ -141,12 +143,9 @@ with st.sidebar:
             vectorstore = FAISS.from_documents(chunks, embeddings)
 
         vectorstore.save_local(user_vector_dir)
-
         st.success("PDF permanently added to your account ✅")
 
 # ---------------- CHAT ----------------
-llm = ChatGroq(model="llama-3.1-8b-instant")
-
 prompt = ChatPromptTemplate.from_template("""
 Answer ONLY using the context.
 
@@ -158,7 +157,6 @@ Question:
 """)
 
 query = st.chat_input("Ask from your PDFs")
-
 if query:
     if not vectorstore:
         st.warning("Upload PDF first")
@@ -171,4 +169,3 @@ if query:
         )
         response = chain.invoke(query)
         st.chat_message("assistant").markdown(response.content)
-
