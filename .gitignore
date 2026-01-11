@@ -1,0 +1,13 @@
+# Ignore environment file
+.env
+
+# Ignore database file
+database.db
+
+# Ignore folders
+vectors/
+__pycache__/
+.streamlit/
+
+# Ignore python cache files
+*.pyc
